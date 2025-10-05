@@ -3,6 +3,8 @@
 Renders a white radial bar (“spokes”) audio visualizer synced to an MP3, composited over your background image, and exports a standard H.264 MP4.  
 Stack: Python 3.13, MoviePy 2.2.x, no librosa / scipy.
 
+![An image with mountains in the background. In the foreground a white ring with spokes around it showing the music visualization.](./example.png)
+
 ## Table of Contents
 
 - [Requirements](#requirements)
