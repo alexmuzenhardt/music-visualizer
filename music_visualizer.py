@@ -1,14 +1,14 @@
 # make_ring_visualizer.py
-# Visualizer: weißer "Strahlen-Ring" (radiale Balken) über eigenem Hintergrundbild, Export MP4 (H.264)
-# Kompatibel mit Python 3.13.x, moviepy 2.2.x — keine librosa/scipy
-# Update: ECHTER Glow — breitere Linien in den Glow-Pässen + Alpha-Falloff
+# Visualizer: white "radiant ring" (radial bars) over a custom background image, exported as MP4 (H.264)
+# Compatible with Python 3.13.x, moviepy 2.2.x — no librosa/scipy
+# Update: TRUE Glow — wider lines in glow passes + alpha falloff
 
 import sys
 import math
 import numpy as np
 from PIL import Image, ImageDraw
 
-# MoviePy 2.2.x Import (mit Fallback)
+# MoviePy 2.2.x import (with fallback)
 try:
     from moviepy import VideoClip, AudioFileClip
 except Exception:
@@ -16,31 +16,31 @@ except Exception:
     VideoClip = _mpy.VideoClip
     AudioFileClip = _mpy.AudioFileClip
 
-# ========= Konfiguration =========
-W, H       = 3840, 2160     # Zielauflösung: 4K
-FPS        = 60             # Bildrate: 60 fps
+# ========= Configuration =========
+W, H       = 3840, 2160     # Target resolution: 4K
+FPS        = 60             # Frame rate: 60 fps
 CENTER     = (W // 2, H // 2.5)
 
-# Optik des Rings
-BASE_RADIUS   = 220         # Grundradius (px) bis zum Beginn der Balken
-SPOKES        = 360         # Anzahl radialer Balken (gleichmäßig um 360°)
-BAR_THICKNESS = 2           # Liniendicke der Balken (px)
-BAR_MIN       = 4           # Basislänge der Balken (px) – damit immer etwas zu sehen ist
-BAR_MAX_EXTRA = 70         # zusätzlicher Ausschlag (px) abhängig vom Pegel
-BASE_RING_ON  = True       # feiner Grundkreis unter den Balken
-BASE_RING_W   = 1           # Linienstärke des Grundkreises
-GLOW_ON       = False        # dezenter „Glow“ (weich) um die Balken
-GLOW_STEPS    = 0           # Anzahl weicher Überzeichnungen
-GLOW_ALPHA    = 80          # Start-Alpha für Glow (0..255)
-GLOW_EXPAND   = 2           # je Step breiter (zusätzliche Pixel zur Linienbreite)
+# Ring appearance
+BASE_RADIUS   = 220         # Base radius (px) up to the start of the bars
+SPOKES        = 360         # Number of radial bars (evenly distributed over 360°)
+BAR_THICKNESS = 2           # Line thickness of bars (px)
+BAR_MIN       = 4           # Minimum bar length (px) – ensures something is always visible
+BAR_MAX_EXTRA = 70          # Additional length (px) depending on audio level
+BASE_RING_ON  = True        # subtle base circle beneath bars
+BASE_RING_W   = 1           # Line width of base circle
+GLOW_ON       = False       # subtle "glow" (soft) around the bars
+GLOW_STEPS    = 0           # number of soft overlay passes
+GLOW_ALPHA    = 80          # initial alpha for glow (0..255)
+GLOW_EXPAND   = 2           # how much wider per step (extra pixels added to line width)
 
-# Audio-Analyse
-WINDOW_SEC = 0.10           # Fenster je Frame (Sekunden) für FFT
+# Audio analysis
+WINDOW_SEC = 0.10           # time window per frame (seconds) for FFT
 LOW_HZ     = 30
 HIGH_HZ    = 12000
-SR         = 44100          # Analyse-Samplerate (ffmpeg-Resample)
+SR         = 44100          # analysis sample rate (ffmpeg resample)
 
-# Ausgabe
+# Output
 OUT_MP4    = "ring_on_bg_spokes.mp4"
 
 # ========= CLI =========
@@ -50,7 +50,7 @@ if len(sys.argv) < 3:
 
 AUDIO_PATH = sys.argv[1]
 BG_PATH    = sys.argv[2]
-FIT_MODE   = (sys.argv[3].lower() if len(sys.argv) >= 4 else "cover")  # "cover" oder "contain"
+FIT_MODE   = (sys.argv[3].lower() if len(sys.argv) >= 4 else "cover")  # "cover" or "contain"
 
 # ========= Audio =========
 audio = AudioFileClip(AUDIO_PATH)
@@ -58,7 +58,7 @@ duration = float(audio.duration or 0.0)
 if duration <= 0.0:
     raise RuntimeError("Audio hat keine Länge.")
 
-# ========= Hintergrund =========
+# ========= Background =========
 def load_and_fit_background(path, w, h, mode="cover"):
     img = Image.open(path).convert("RGB")
     src_w, src_h = img.size
@@ -91,7 +91,7 @@ def load_and_fit_background(path, w, h, mode="cover"):
 
 BG_BASE = load_and_fit_background(BG_PATH, W, H, FIT_MODE).convert("RGBA")
 
-# ========= Analyse-Utils =========
+# ========= Analysis Utils =========
 def subclip_compat(clip, start, end):
     if hasattr(clip, "subclip"):
         return clip.subclip(start, end)
@@ -144,7 +144,7 @@ def spectrum_to_bands(freqs, mags, edges=BAND_EDGES):
     idx = np.clip(idx, 0, bands - 1)
     np.add.at(out, idx, m)
     out = np.log1p(out)
-    # Glättung: leicht breiteres Fenster, damit die Spokes nicht „flackern“
+    # Smoothing: slightly wider window to prevent "flickering" spokes
     if bands >= 9:
         k = 9
         pad = k // 2
@@ -156,14 +156,8 @@ def spectrum_to_bands(freqs, mags, edges=BAND_EDGES):
         out /= mx
     return out
 
-# ========= Render-Logik (Spokes) =========
+# ========= Render Logic (Spokes) =========
 def draw_spokes(draw: ImageDraw.ImageDraw, levels: np.ndarray, color=(255,255,255,255), width: int = None):
-    """
-    Zeichnet SPOKES Balken radial um den Kreis:
-    - Jeder Balken startet bei BASE_RADIUS
-    - Länge = BAR_MIN + BAR_MAX_EXTRA * level^0.9
-    - width: tatsächliche Liniendicke (Standard = BAR_THICKNESS)
-    """
     w = int(max(1, (BAR_THICKNESS if width is None else width)))
     cx, cy = CENTER
     thetas = np.linspace(0.0, 2.0 * math.pi, len(levels), endpoint=False, dtype=np.float32)
@@ -177,16 +171,16 @@ def draw_spokes(draw: ImageDraw.ImageDraw, levels: np.ndarray, color=(255,255,25
         draw.line([(x0, y0), (x1, y1)], fill=color, width=w)
 
 def make_frame_rgb(t):
-    # Audio → FFT → Bänder
+    # Audio → FFT → bands
     sig = get_audio_window(t, WINDOW_SEC, SR)
     freqs, mags = fft_magnitude(sig, SR)
     levels = spectrum_to_bands(freqs, mags, BAND_EDGES)
 
-    # Hintergrund kopieren (RGBA)
+    # Copy background (RGBA)
     frame = BG_BASE.copy()
     d = ImageDraw.Draw(frame, "RGBA")
 
-    # Grundkreis (dezent)
+    # Base circle (subtle)
     if BASE_RING_ON and BASE_RING_W > 0:
         d.ellipse(
             [CENTER[0] - BASE_RADIUS, CENTER[1] - BASE_RADIUS,
@@ -194,15 +188,15 @@ def make_frame_rgb(t):
             outline=(255, 255, 255, 160), width=BASE_RING_W
         )
 
-    # ---- Glow: echte Breite + Alpha-Falloff ----
+    # ---- Glow: true width + alpha falloff ----
     if GLOW_ON and GLOW_STEPS > 0:
         for i in range(1, GLOW_STEPS + 1):
-            # Von außen nach innen: mehr Breite, weniger Alpha
+            # From outside to inside: more width, less alpha
             width = BAR_THICKNESS + i * GLOW_EXPAND
             alpha = max(0, int(GLOW_ALPHA * (1.0 - (i - 1) / max(1, GLOW_STEPS))))
             draw_spokes(d, levels, color=(255, 255, 255, alpha), width=width)
 
-    # Scharfe, finale Spokes
+    # Sharp, final spokes
     draw_spokes(d, levels, color=(255, 255, 255, 255), width=BAR_THICKNESS)
 
     return np.array(frame.convert("RGB"), dtype=np.uint8)
@@ -221,4 +215,4 @@ video.write_videofile(
     threads=4
 )
 
-print(f"\nFertig: {OUT_MP4}\n")
+print(f"\nFinish: {OUT_MP4}\n")
