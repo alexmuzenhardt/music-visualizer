@@ -1,4 +1,4 @@
-# make_ring_visualizer.py
+# music_visualizer.py
 # Visualizer: white "radiant ring" (radial bars) over a custom background image, exported as MP4 (H.264)
 # Compatible with Python 3.13.x, moviepy 2.2.x — no librosa/scipy
 # Update: TRUE Glow — wider lines in glow passes + alpha falloff
@@ -41,11 +41,11 @@ HIGH_HZ    = 12000
 SR         = 44100          # analysis sample rate (ffmpeg resample)
 
 # Output
-OUT_MP4    = "ring_on_bg_spokes.mp4"
+OUT_MP4    = "output_music_visualizer.mp4"
 
 # ========= CLI =========
 if len(sys.argv) < 3:
-    print("Verwendung: python make_ring_visualizer.py <audiofile.mp3> <background_image> [cover|contain]")
+    print("Usage: python music_visualizer.py <audiofile.mp3> <background_image> [cover|contain]")
     sys.exit(1)
 
 AUDIO_PATH = sys.argv[1]
@@ -56,7 +56,7 @@ FIT_MODE   = (sys.argv[3].lower() if len(sys.argv) >= 4 else "cover")  # "cover"
 audio = AudioFileClip(AUDIO_PATH)
 duration = float(audio.duration or 0.0)
 if duration <= 0.0:
-    raise RuntimeError("Audio hat keine Länge.")
+    raise RuntimeError("Audio has no length.")
 
 # ========= Background =========
 def load_and_fit_background(path, w, h, mode="cover"):
@@ -97,7 +97,7 @@ def subclip_compat(clip, start, end):
         return clip.subclip(start, end)
     if hasattr(clip, "subclipped"):
         return clip.subclipped(start, end)
-    raise AttributeError("Clip hat weder subclip noch subclipped.")
+    raise AttributeError("Clip does not has subclip or subclipped.")
 
 def get_audio_window(t, win_sec=WINDOW_SEC, sr=SR):
     start = max(0.0, t - win_sec / 2)
